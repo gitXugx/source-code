@@ -229,6 +229,52 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
 }
 ```
 
+## Vector
+它的实现和 `ArrayList` 基本一致, 但是 `Vector` 每个对外方法都加上了 `synchronized` 关键字来是实现线程安全。
+还有就是扩容方法有点不同: 
+```java
+public class Vector<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+    private void grow(int minCapacity) {
+        // overflow-conscious code
+        int oldCapacity = elementData.length;
+        int newCapacity = oldCapacity + ((capacityIncrement > 0) ?
+                                         capacityIncrement : oldCapacity);
+        if (newCapacity - minCapacity < 0)
+            newCapacity = minCapacity;
+        if (newCapacity - MAX_ARRAY_SIZE > 0)
+            newCapacity = hugeCapacity(minCapacity);
+        elementData = Arrays.copyOf(elementData, newCapacity);
+    }
+}
+```
+`Vector` 每次扩容为当前的2倍
+如果想让线程不安全的 `ArrayList` 变成线程安全的也可以使用 `Collections.synchronizedList()`。
+```java
+public class Collections {
+   public static <T> List<T> synchronizedList(List<T> list) {
+        return (list instanceof RandomAccess ?
+                new SynchronizedRandomAccessList<>(list) :
+                new SynchronizedList<>(list));
+    }
+}
+```
+`SynchronizedList` 的实现是典型的装饰着模式, 使 `ArrayList` 具有线程安全的功能, 里面值得注意的 `SynchronizedList` 使用的锁是 当前`list` 对象
+
+```java
+  static class SynchronizedCollection<E> implements Collection<E>, Serializable {
+        private static final long serialVersionUID = 3053995032091335093L;
+
+        final Collection<E> c;  // Backing Collection
+        final Object mutex;     // Object on which to synchronize
+
+        SynchronizedCollection(Collection<E> c) {
+            this.c = Objects.requireNonNull(c);
+            // 当前对象
+            mutex = this;
+        }
+  }
+```
+
 ## 总结
 
 1. ArrayList 不支持并发操作, 在并发操作时候有可能会抛出异常。
