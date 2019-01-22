@@ -127,7 +127,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
 }    
 ```
 
-一共有5个添加元素的方法:
+一共有4个添加元素的方法:
 - `add(E e)` 直接添加一个元素
 - `add(int index, E element)` 指定位置插入元素
 - `addAll(Collection<? extends E> c)` 把一个集合添加到当前集合
