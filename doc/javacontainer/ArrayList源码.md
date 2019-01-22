@@ -25,7 +25,7 @@ public class ArrayList<E> extends AbstractList<E>
 
 `AbstractList`  继承 `AbstractCollection` 实现 `List` 他们俩又继承和实现 `Collection` 和 `Iterable` 接口
 
-<div align="center"> <img src="https://github.com/gitXugx/source-code/tree/master/doc/images/AbstractListUml.jpg" width =50% height=50% /> </div><br>
+<div align="center"> <img src="https://github.com/gitXugx/source-code/tree/master/doc/images/AbstractListUml.jpg"  /> </div><br>
 
 
 - `Iterable` 是迭代器, 实现它可以使用 `for-each` 循环, 它其中的方法定义了获取迭代器的抽象工厂方法和java8的新方法。
@@ -140,7 +140,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
         }
         return minCapacity;
     }
-    
+
     private void ensureExplicitCapacity(int minCapacity) {
         modCount++;
 
