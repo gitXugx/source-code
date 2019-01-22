@@ -1,5 +1,5 @@
 # ArrayList源码
-> 像他的名字一样是一个数组列表, 低层组要由数组实现, 但是提供的功能比数组更强大。
+> 像他的名字一样是一个数组列表, 低层组要由数组实现, 但是提供的功能比数组更强大。具体数组 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E6%95%B0%E7%BB%84.md)
 
 ## 字段以及声明
 
@@ -233,8 +233,9 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
 
 1. ArrayList 不支持并发操作, 在并发操作时候有可能会抛出异常。
 2. ArrayList 扩容也会遇到最大值
-
-
+3. 涉及到角标的是直接访问, 涉及到对象的需要遍历查找
+4. 支持对 `null` 元素操作
+5. 具体优缺点 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E6%95%B0%E7%BB%84.md)
 
 
 
