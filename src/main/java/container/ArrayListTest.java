@@ -16,9 +16,14 @@ public class ArrayListTest {
 
         Person[] people1 = Arrays.copyOf(people, 3);
 
+        Person[] person2 = new Person[10];
+        System.out.println(people.length);
+        System.out.println(person2.length);
         Person person1 =  people1[0];
+        System.out.println(person1.i);
         person1.setName("bbbb");
         System.out.println(people[0]);
         System.out.println(people1[0]);
     }
+
 }

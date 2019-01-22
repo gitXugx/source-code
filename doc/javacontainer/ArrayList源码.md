@@ -43,6 +43,7 @@ public class ArrayList<E> extends AbstractList<E>
 
 ```java
 public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+    //1.
     public ArrayList(int initialCapacity) {
         if (initialCapacity > 0) {
             this.elementData = new Object[initialCapacity];
@@ -52,9 +53,11 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
             throw new IllegalArgumentException("Illegal Capacity: " + initialCapacity);
         }
     }
+    //2.
     public ArrayList() {
         this.elementData = DEFAULTCAPACITY_EMPTY_ELEMENTDATA;
     }
+    //3.
     public ArrayList(Collection<? extends E> c) {
         elementData = c.toArray();
         if ((size = elementData.length) != 0) {
@@ -79,11 +82,13 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
 
 ```java
 public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+   //1.
    public boolean add(E e) {
         ensureCapacityInternal(size + 1);  // Increments modCount!!
         elementData[size++] = e;
         return true;
     }
+    //2.
     public void add(int index, E element) {
         rangeCheckForAdd(index);
 
@@ -93,6 +98,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
         elementData[index] = element;
         size++;
     }
+    //3.
     public boolean addAll(Collection<? extends E> c) {
         Object[] a = c.toArray();
         int numNew = a.length;
@@ -101,6 +107,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
         size += numNew;
         return numNew != 0;
     }
+    //4.
    public boolean addAll(int index, Collection<? extends E> c) {
         rangeCheckForAdd(index);
 
@@ -126,14 +133,14 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
 - `addAll(Collection<? extends E> c)` 把一个集合添加到当前集合
 - `addAll(int index, Collection<? extends E> c)` 从指定位置添加一个集合
 
-### `add(E e)` 方法
+### add(E e) 方法
 
 ```java
 public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
     private void ensureCapacityInternal(int minCapacity) {
         ensureExplicitCapacity(calculateCapacity(elementData, minCapacity));
     }
-
+    //1. 
     private static int calculateCapacity(Object[] elementData, int minCapacity) {
         if (elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
             return Math.max(DEFAULT_CAPACITY, minCapacity);
@@ -144,21 +151,88 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
     private void ensureExplicitCapacity(int minCapacity) {
         modCount++;
 
-        // overflow-conscious code
+        //2. overflow-conscious code
         if (minCapacity - elementData.length > 0)
             grow(minCapacity);
     }
 }
 ```
+1. `calculateCapacity` 是计算出最小容量
+2. `ensureExplicitCapacity` 根据当前数组数据所占容量和数组总容量判断是否需要扩容
 
+扩容逻辑:
 
+```java
+public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
 
+    private void grow(int minCapacity) {
+        //1. 获取数组长度
+        int oldCapacity = elementData.length;
+        //2. 新的数组为之前数组的1.5倍
+        int newCapacity = oldCapacity + (oldCapacity >> 1);
+        //3. 如果初始数组容量为0, 则直接按添加元素  
+        if (newCapacity - minCapacity < 0)
+            newCapacity = minCapacity;
+        //4. 如果扩容的数组容量超过了最大容量时, 只赋值最大容量    
+        if (newCapacity - MAX_ARRAY_SIZE > 0)
+            newCapacity = hugeCapacity(minCapacity);
+        //5. minCapacity is usually close to size, so this is a win:
+        elementData = Arrays.copyOf(elementData, newCapacity);
+    }
 
+    private static int hugeCapacity(int minCapacity) {
+        if (minCapacity < 0) // overflow
+            throw new OutOfMemoryError();
+        return (minCapacity > MAX_ARRAY_SIZE) ?
+            Integer.MAX_VALUE :
+            MAX_ARRAY_SIZE;
+    }
+}
+```
 
+### remove(int index) 方法
 
+```java
+public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
 
+    public E remove(int index) {
+        // 校验角标越界问题
+        rangeCheck(index);
 
+        modCount++;
+        E oldValue = elementData(index);
+        // 把要移除元素后面的元素整体往前移动一个
+        int numMoved = size - index - 1;
+        if (numMoved > 0)
+            System.arraycopy(elementData, index+1, elementData, index,
+                             numMoved);
+        // 但是最后一个是copy之前的数据, 所以要置null                     
+        elementData[--size] = null; // clear to let GC do its work
 
+        return oldValue;
+    }
+}
+```
+
+### trimToSize() 方法
+
+```java
+public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+
+    public void trimToSize() {
+        modCount++;
+        if (size < elementData.length) {
+            // 如果size == 0 就给空元素数组, 如果size >0 就把数组大小改成 size 大小
+            elementData = (size == 0) ? EMPTY_ELEMENTDATA : Arrays.copyOf(elementData, size);
+        }
+    }
+}
+```
+
+## 总结
+
+1. ArrayList 不支持并发操作, 在并发操作时候有可能会抛出异常。
+2. ArrayList 扩容也会遇到最大值
 
 
 

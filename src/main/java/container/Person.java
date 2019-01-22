@@ -9,6 +9,7 @@ package container;
 public class Person {
     private String name;
     private String nick;
+    int i;
 
     public String getName() {
         return name;
