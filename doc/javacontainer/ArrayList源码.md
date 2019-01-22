@@ -247,8 +247,7 @@ public class Vector<E> extends AbstractList<E> implements List<E>, RandomAccess,
     }
 }
 ```
-`Vector` 每次扩容为当前的2倍
-如果想让线程不安全的 `ArrayList` 变成线程安全的也可以使用 `Collections.synchronizedList()`。
+`Vector` 每次扩容为当前的2倍, 如果想让线程不安全的 `ArrayList` 变成线程安全的也可以使用 `Collections.synchronizedList()`。
 ```java
 public class Collections {
    public static <T> List<T> synchronizedList(List<T> list) {
