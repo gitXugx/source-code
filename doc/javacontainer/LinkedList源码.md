@@ -1,5 +1,5 @@
 ## LinkedList源码
-> 内部实现是链表和数组有很多不同的地方, 但是他们也有互补的地方, 具体差距可以查看链表 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E9%93%BE%E8%A1%A8.md)
+> 内部实现是链表和数组有很多不同的地方, 但是他们也有互补的地方。
 
 ## LinkedList
 ### 字段以及声明

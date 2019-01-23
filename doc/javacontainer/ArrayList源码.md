@@ -1,6 +1,5 @@
 # ArrayList源码
-> 像他的名字一样是一个数组列表, 低层组要由数组实现, 但是提供的功能比数组更强大。具体数组 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E6%95%B0%E7%BB%84.md)
-
+> 像他的名字一样是一个数组列表, 低层组要由数组实现, 但是提供的功能比数组更强大。
 
 ## ArrayList 
 ### 字段以及声明
