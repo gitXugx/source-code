@@ -135,7 +135,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
 - `addAll(Collection<? extends E> c)` 把一个集合添加到当前集合, 该时间复杂度是 `O(1)`
 - `addAll(int index, Collection<? extends E> c)` 从指定位置添加一个集合, 最坏的情况下在数组头部添加, 该时间复杂度是 `O(n)`
 
-### add(E e) 方法
+**add(E e) 方法**
 
 ```java
 public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
@@ -192,7 +192,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
 }
 ```
 
-### remove(int index) 方法
+**remove(int index) 方法**
 
 ```java
 public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
@@ -219,7 +219,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
 - 移除元素最坏的情况下, 时间复杂度为 `O(n)`, 因为要做数据copy
 - 他不会改变数组大小。
 
-### trimToSize() 方法
+**trimToSize() 方法**
 
 ```java
 public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {

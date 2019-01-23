@@ -1,7 +1,8 @@
 ## LinkedList源码
 > 内部实现是链表和数组有很多不同的地方, 但是他们也有互补的地方, 具体差距可以查看链表 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E9%93%BE%E8%A1%A8.md)
 
-## 字段以及声明
+## LinkedList
+### 字段以及声明
 
 ```java
 public class LinkedList<E> extends AbstractSequentialList<E> implements List<E>, Deque<E>, Cloneable, java.io.Serializable {
@@ -42,7 +43,7 @@ public class LinkedList<E> extends AbstractSequentialList<E> implements List<E>,
 - `Serializable` 支持序列化, `serialVersionUID` 序列化的唯一编号
 - `Deque` 双端队列的实现。
 
-## 方法
+### 方法
 
 链表不像数组创建需要连续的内存空间, 所以链表构造方法无需去指定链表的大小:
 
@@ -57,7 +58,7 @@ public class LinkedList<E> extends AbstractSequentialList<E> implements List<E>,
 }    
 ```
 
-### add
+**add**
 
 - `add(E e)` 在链表的尾部添加一个节点
 - `add(int index, E element)` 在指定的节点后添加一个节点
@@ -71,10 +72,10 @@ public class LinkedList<E> extends AbstractSequentialList<E> implements List<E>,
 因为实现了 `Deque` 的原因 `LinkedList` 还可以作为无边界的 `双端队列`, `单向队列`, `栈` 来使用, 其中都有提供的方法 
 
 ## 总结
-1. 不支持多线程
-1. `LinkedList` 不仅仅是链表其中提供的方法还可以当作其他的数据结构来使用。
-2. 它也支持 `null` 元素
-3. 具体优缺点 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E9%93%BE%E8%A1%A8.md)
+1. 不支持多线程, 支持多线程的
+2. `LinkedList` 不仅仅是链表其中提供的方法还可以当作其他的数据结构来使用。
+3. 它也支持 `null` 元素
+4. 具体链表数据结构优缺点 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E9%93%BE%E8%A1%A8.md)
 
 
 
