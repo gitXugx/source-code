@@ -1,7 +1,9 @@
 # ArrayList源码
 > 像他的名字一样是一个数组列表, 低层组要由数组实现, 但是提供的功能比数组更强大。具体数组 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E6%95%B0%E7%BB%84.md)
 
-## 字段以及声明
+
+## ArrayList 
+### 字段以及声明
 
 ```java
 public class ArrayList<E> extends AbstractList<E>
@@ -37,7 +39,7 @@ public class ArrayList<E> extends AbstractList<E>
 - `Cloneable` 使 `List` 支持浅克隆
 - `Serializable` 支持序列化, `serialVersionUID` 序列化的唯一编号
 
-## 方法
+### 方法
 
 先构造方法:
 
@@ -128,10 +130,10 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
 ```
 
 一共有4个添加元素的方法:
-- `add(E e)` 直接添加一个元素
-- `add(int index, E element)` 指定位置插入元素
-- `addAll(Collection<? extends E> c)` 把一个集合添加到当前集合
-- `addAll(int index, Collection<? extends E> c)` 从指定位置添加一个集合
+- `add(E e)` 在数组尾部, 直接添加一个元素, 该时间复杂度是 `O(1)`
+- `add(int index, E element)` 指定位置插入元素, 最坏的情况下在数组头部添加, 该时间复杂度是 `O(n)`
+- `addAll(Collection<? extends E> c)` 把一个集合添加到当前集合, 该时间复杂度是 `O(1)`
+- `addAll(int index, Collection<? extends E> c)` 从指定位置添加一个集合, 最坏的情况下在数组头部添加, 该时间复杂度是 `O(n)`
 
 ### add(E e) 方法
 
@@ -213,6 +215,9 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
     }
 }
 ```
+- 移除元素在数组尾部时, 时间复杂度为 `O(1)`
+- 移除元素最坏的情况下, 时间复杂度为 `O(n)`, 因为要做数据copy
+- 他不会改变数组大小。
 
 ### trimToSize() 方法
 
@@ -228,6 +233,10 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
     }
 }
 ```
+- `trimToSize` 方法会改变数组的大小。
+
+
+
 
 ## Vector
 它的实现和 `ArrayList` 基本一致, 但是 `Vector` 每个对外方法都加上了 `synchronized` 关键字来是实现线程安全。
@@ -276,15 +285,12 @@ public class Collections {
 
 ## 总结
 
-1. ArrayList 不支持并发操作, 在并发操作时候有可能会抛出异常。
-2. ArrayList 扩容也会遇到最大值
-3. 涉及到角标的是直接访问, 涉及到对象的需要遍历查找
-4. 支持对 `null` 元素操作
-5. 具体优缺点 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E6%95%B0%E7%BB%84.md)
-
-
-
-
+1. `ArrayList` 适合的场景: 当你删除插入操作比较少 (尾部操作更快), 随机访问多
+2. `ArrayList` 不适合多线程场景, 但是可以使用 `Collections.synchronizedList()` 来保证 `List` 接口的方法都是线程安全的
+3. `Vector` 是关键字 `synchronized` 的同步, 其他实现基本和 `ArrayList` 一样
+4. 都支持 `fail-fast` 以防在`并发修改时`发生不必要的异常
+5. 支持对 `null` 元素操作
+6. 具体数组数据结构优缺点 [点这里](https://github.com/gitXugx/data-structure-arithmetic/blob/master/doc/datastructure/%E6%95%B0%E7%BB%84.md)
 
 
 
