@@ -99,6 +99,7 @@ public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneabl
 ```
 为什么不直接用 `h & (length - 1);` 而是使用 `(h = key.hashCode()) ^ (h >>> 16)` ，当数组很小的时候，`hashCode` 只是低16位参与了运算，而高位未参与运算，导致分配的槽不均匀，如果使用 `(h = key.hashCode()) ^ (h >>> 16)` 先与自己的最高位异或，然后再与数组长度取取模，不论数组大小 `hashCode` 的高低位都会参与运算，分配要比之前均匀。
 
+
 **扩容**
 ```java
 public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneable, Serializable {
@@ -147,13 +148,16 @@ public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneabl
                         //该槽中只有一个直接放到新的hash表中
                         newTab[e.hash & (newCap - 1)] = e;
                     else if (e instanceof TreeNode)
+                        //遍历树结构存放到新的hash表中
                         ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
                     else { // preserve order
+                        //链表结构数据的迁移到新的hash表中
                         Node<K,V> loHead = null, loTail = null;
                         Node<K,V> hiHead = null, hiTail = null;
                         Node<K,V> next;
                         do {
                             next = e.next;
+                            //链表的节点，分为low位和high位，0是存储再low位，1是存储在high位。详细讲
                             if ((e.hash & oldCap) == 0) {
                                 if (loTail == null)
                                     loHead = e;
@@ -175,6 +179,7 @@ public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneabl
                         }
                         if (hiTail != null) {
                             hiTail.next = null;
+                            //hash&容量时， low和 high位正好相差一个原始容量。
                             newTab[j + oldCap] = hiHead;
                         }
                     }
@@ -190,8 +195,70 @@ public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneabl
 2. 原 `table` 使用有参构造函数初始化的情况下
 3. 原 `table` 使用无参构造函数初始化的情况下
 
+**链表的重新Hash**
+
+`loHead 、loTail 、hiHead 、hiTail` 这4个变量代表low位链表和high位链表，在 `tab[(n - 1) & hash]` 时候是 `n - 1` 为了防止hash碰撞严重，前面**容量计算**有讲，如果hash值直接&n会得到正好相差一个容量的值。
+例如: key1(0100)，key2(10100) 容量为16(10000)  `1111 & 0100 = 4` , `10100 & 1111 = 4` ，当他们直接& 容量时会正好相差一个容量, 当容量扩大2倍时, `10100 & 11111 = 20` 正好在20位置。
 
 
+
+**put添加**
+```java
+public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneable, Serializable {
+    final V putVal(int hash, K key, V value, boolean onlyIfAbsent, boolean evict) {
+            Node<K,V>[] tab; Node<K,V> p; int n, i;
+            //table没有初始化进行初始化
+            if ((tab = table) == null || (n = tab.length) == 0)
+                n = (tab = resize()).length;
+            //如果该位置为null，确定该key在hash表中位置
+            if ((p = tab[i = (n - 1) & hash]) == null)
+                tab[i] = newNode(hash, key, value, null);
+            else {
+                Node<K,V> e; K k;
+                //如果hash和key都一样则替换以前的value
+                if (p.hash == hash &&
+                    ((k = p.key) == key || (key != null && key.equals(k))))
+                    e = p;
+                //看该节点时不是红黑树，如果时树结构则进行添加到树上
+                else if (p instanceof TreeNode)
+                    e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+                else {
+                    //去遍历链表
+                    for (int binCount = 0; ; ++binCount) {
+                        if ((e = p.next) == null) {
+                            //添加节点
+                            p.next = newNode(hash, key, value, null);
+                            //达到转换为树的条件
+                            if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                                treeifyBin(tab, hash);
+                            break;
+                        }
+                        //已经有该key了
+                        if (e.hash == hash &&
+                            ((k = e.key) == key || (key != null && key.equals(k))))
+                            break;
+                        //继续循环    
+                        p = e;
+                    }
+                }
+                if (e != null) { // existing mapping for key
+                    V oldValue = e.value;
+                    if (!onlyIfAbsent || oldValue == null)
+                        e.value = value;
+                    //空实现    
+                    afterNodeAccess(e);
+                    return oldValue;
+                }
+            }
+            ++modCount;
+            if (++size > threshold)
+                resize();
+            //空实现 
+            afterNodeInsertion(evict);
+            return null;
+        }
+}
+```
 
 
 
