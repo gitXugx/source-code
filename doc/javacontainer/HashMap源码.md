@@ -16,7 +16,7 @@ public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneabl
     static final int TREEIFY_THRESHOLD = 8;
     //扩容时tree转化为链表结构的阈值
     static final int UNTREEIFY_THRESHOLD = 6;
-
+    //树化必须hash表容量大于64才会进行树化
     static final int MIN_TREEIFY_CAPACITY = 64;
     //修改计数， 支持fast-fail
     transient int modCount;
@@ -89,6 +89,7 @@ public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneabl
 使用向右位移，取到合适的 `2^n` 次方，因为计算数据存放的时候 `(n - 1) & hash` ，在不为 `2^n` 的时候，最后一位进行与的时候总是 `0`，造成严重的hash碰撞
 
 **hash计算**
+
 ```java
 public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneable, Serializable {
     static final int hash(Object key) {
@@ -100,7 +101,100 @@ public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneabl
 为什么不直接用 `h & (length - 1);` 而是使用 `(h = key.hashCode()) ^ (h >>> 16)` ，当数组很小的时候，`hashCode` 只是低16位参与了运算，而高位未参与运算，导致分配的槽不均匀，如果使用 `(h = key.hashCode()) ^ (h >>> 16)` 先与自己的最高位异或，然后再与数组长度取取模，不论数组大小 `hashCode` 的高低位都会参与运算，分配要比之前均匀。
 
 
+**put添加**
+
+```java
+public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneable, Serializable {
+    final V putVal(int hash, K key, V value, boolean onlyIfAbsent, boolean evict) {
+            Node<K,V>[] tab; Node<K,V> p; int n, i;
+            //table没有初始化进行初始化
+            if ((tab = table) == null || (n = tab.length) == 0)
+                n = (tab = resize()).length;
+            //如果该位置为null，确定该key在hash表中位置
+            if ((p = tab[i = (n - 1) & hash]) == null)
+                tab[i] = newNode(hash, key, value, null);
+            else {
+                Node<K,V> e; K k;
+                //如果hash和key都一样则替换以前的value
+                if (p.hash == hash &&
+                    ((k = p.key) == key || (key != null && key.equals(k))))
+                    e = p;
+                //看该节点时不是红黑树，如果时树结构则进行添加到树上
+                else if (p instanceof TreeNode)
+                    //根据hash来比较是添加到树的那个节点
+                    e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+                else {
+                    //去遍历链表
+                    for (int binCount = 0; ; ++binCount) {
+                        if ((e = p.next) == null) {
+                            //添加节点
+                            p.next = newNode(hash, key, value, null);
+                            //达到转换为树的条件
+                            if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                                treeifyBin(tab, hash);
+                            break;
+                        }
+                        //已经有该key了
+                        if (e.hash == hash &&
+                            ((k = e.key) == key || (key != null && key.equals(k))))
+                            break;
+                        //继续循环    
+                        p = e;
+                    }
+                }
+                if (e != null) { // existing mapping for key
+                    V oldValue = e.value;
+                    if (!onlyIfAbsent || oldValue == null)
+                        e.value = value;
+                    //空实现    
+                    afterNodeAccess(e);
+                    return oldValue;
+                }
+            }
+            ++modCount;
+            if (++size > threshold)
+                resize();
+            //空实现 
+            afterNodeInsertion(evict);
+            return null;
+        }
+}
+```
+
+
+**treeifyBin树化**
+
+```java
+public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneable, Serializable {
+   final void treeifyBin(Node<K,V>[] tab, int hash) {
+        int n, index; Node<K,V> e;
+        //树化的条件必须hash表容量>64 否则扩容
+        if (tab == null || (n = tab.length) < MIN_TREEIFY_CAPACITY)
+            resize();
+        else if ((e = tab[index = (n - 1) & hash]) != null) {
+            TreeNode<K,V> hd = null, tl = null;
+            do {
+                //链表对象转的树对象
+                TreeNode<K,V> p = replacementTreeNode(e, null);
+                if (tl == null)
+                    hd = p;
+                else {
+                    p.prev = tl;
+                    tl.next = p;
+                }
+                tl = p;
+            } while ((e = e.next) != null);
+            if ((tab[index] = hd) != null)
+                //转换成红黑树根据hash来比较
+                hd.treeify(tab);
+        }
+    }
+}
+```
+当hash表容量比较小的时候本身就容易发生hash碰撞，而树最小的结构是 `8` ，所以这里判断hash表必须大于 `64` 才会进行树化
+
 **扩容**
+
 ```java
 public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneable, Serializable {
     final Node<K,V>[] resize() {
@@ -202,65 +296,7 @@ public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneabl
 
 
 
-**put添加**
-```java
-public class HashMap<K,V> extends AbstractMap<K,V> implements Map<K,V>, Cloneable, Serializable {
-    final V putVal(int hash, K key, V value, boolean onlyIfAbsent, boolean evict) {
-            Node<K,V>[] tab; Node<K,V> p; int n, i;
-            //table没有初始化进行初始化
-            if ((tab = table) == null || (n = tab.length) == 0)
-                n = (tab = resize()).length;
-            //如果该位置为null，确定该key在hash表中位置
-            if ((p = tab[i = (n - 1) & hash]) == null)
-                tab[i] = newNode(hash, key, value, null);
-            else {
-                Node<K,V> e; K k;
-                //如果hash和key都一样则替换以前的value
-                if (p.hash == hash &&
-                    ((k = p.key) == key || (key != null && key.equals(k))))
-                    e = p;
-                //看该节点时不是红黑树，如果时树结构则进行添加到树上
-                else if (p instanceof TreeNode)
-                    e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
-                else {
-                    //去遍历链表
-                    for (int binCount = 0; ; ++binCount) {
-                        if ((e = p.next) == null) {
-                            //添加节点
-                            p.next = newNode(hash, key, value, null);
-                            //达到转换为树的条件
-                            if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
-                                treeifyBin(tab, hash);
-                            break;
-                        }
-                        //已经有该key了
-                        if (e.hash == hash &&
-                            ((k = e.key) == key || (key != null && key.equals(k))))
-                            break;
-                        //继续循环    
-                        p = e;
-                    }
-                }
-                if (e != null) { // existing mapping for key
-                    V oldValue = e.value;
-                    if (!onlyIfAbsent || oldValue == null)
-                        e.value = value;
-                    //空实现    
-                    afterNodeAccess(e);
-                    return oldValue;
-                }
-            }
-            ++modCount;
-            if (++size > threshold)
-                resize();
-            //空实现 
-            afterNodeInsertion(evict);
-            return null;
-        }
-}
-```
 
-test
 
 
 
