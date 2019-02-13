@@ -232,10 +232,8 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAcce
     }
 }
 ```
+
 - `trimToSize` 方法会改变数组的大小。
-
-
-
 
 ## Vector
 它的实现和 `ArrayList` 基本一致, 但是 `Vector` 每个对外方法都加上了 `synchronized` 关键字来是实现线程安全。
