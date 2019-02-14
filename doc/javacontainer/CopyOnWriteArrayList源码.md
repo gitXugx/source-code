@@ -89,6 +89,91 @@ public class CopyOnWriteArrayList<E> implements List<E>, RandomAccess, Cloneable
 }
 ```
 
+这里不需要扩容，每次的添加都需要创建新的数组，然后老数组给多线程下读取，以达到线程安全的目的。相对的空间消耗也变成了2倍
+
+
+**remove**
+
+
+```java
+public class CopyOnWriteArrayList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+
+    public E remove(int index) {
+        final ReentrantLock lock = this.lock;
+        lock.lock();
+        try {
+            Object[] elements = getArray();
+            int len = elements.length;
+            E oldValue = get(elements, index);
+            int numMoved = len - index - 1;
+            if (numMoved == 0)
+                setArray(Arrays.copyOf(elements, len - 1));
+            else {
+                Object[] newElements = new Object[len - 1];
+                System.arraycopy(elements, 0, newElements, 0, index);
+                System.arraycopy(elements, index + 1, newElements, index,
+                                 numMoved);
+                setArray(newElements);
+            }
+            return oldValue;
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+```
+
+基本和add逻辑一样，先创建副本，然后删除副本元素，进行copy然后设置成新的数组
+
+
+**get**
+
+```java
+public class CopyOnWriteArrayList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+
+    private E get(Object[] a, int index) {
+        return (E) a[index];
+    }
+}    
+```
+不论是不是在多线程下都不需要进行加锁，因为读取的是副本数组
+
+
+**迭代器的实现**
+
+```java
+    static final class COWIterator<E> implements ListIterator<E> {
+        /** Snapshot of the array */
+        private final Object[] snapshot;
+        /** Index of element to be returned by subsequent call to next.  */
+        private int cursor;
+
+        private COWIterator(Object[] elements, int initialCursor) {
+            cursor = initialCursor;
+            snapshot = elements;
+        }
+
+        public boolean hasNext() {
+            return cursor < snapshot.length;
+        }
+
+        public boolean hasPrevious() {
+            return cursor > 0;
+        }
+
+        @SuppressWarnings("unchecked")
+        public E next() {
+            if (! hasNext())
+                throw new NoSuchElementException();
+            return (E) snapshot[cursor++];
+        }
+}
+```
+迭代器的实现也是通过快照的模式来保证多线程的情况下，迭代的正确性。
+
+
+
+
 
 
 
