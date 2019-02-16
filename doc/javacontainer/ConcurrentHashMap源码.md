@@ -30,8 +30,11 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
     private static int RESIZE_STAMP_BITS = 16;
     private static final int MAX_RESIZERS = (1 << (32 - RESIZE_STAMP_BITS)) - 1;
     private static final int RESIZE_STAMP_SHIFT = 32 - RESIZE_STAMP_BITS;
+    //在扩容的时候，扩容好了的槽老数组的hash设置为 MOVED
     static final int MOVED     = -1; // hash for forwarding nodes
+    //当节点树化，root节点的hash为 TREEBIN
     static final int TREEBIN   = -2; // hash for roots of trees
+    
     static final int RESERVED  = -3; // hash for transient reservations
     static final int HASH_BITS = 0x7fffffff; // usable bits of normal node hash
 
@@ -93,7 +96,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
 ```java
 public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements ConcurrentMap<K,V>, Serializable {
     final V putVal(K key, V value, boolean onlyIfAbsent) {
-        //concurrentHashMap key和value都不能为空
+        //concurrentHashMap key和value都不能为空，
         if (key == null || value == null) throw new NullPointerException();
         //高低位异或使其分布均匀
         int hash = spread(key.hashCode());
@@ -103,18 +106,25 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
             if (tab == null || (n = tab.length) == 0)
                 //初始化数组
                 tab = initTable();
+            // 根据hash取出该位置的值
             else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
+                //如果等于null 则直接设置值，若设置成功则跳出循环，否则接着尝试重新读取设值
                 if (casTabAt(tab, i, null,
                              new Node<K,V>(hash, key, value, null)))
                     break;                   // no lock when adding to empty bin
             }
+            //当前map在扩容，进行一个协助扩容
             else if ((fh = f.hash) == MOVED)
                 tab = helpTransfer(tab, f);
             else {
                 V oldVal = null;
+                //拿到当前数组的角标的第一个元素的锁，进行一个添加
                 synchronized (f) {
+                    //看在拿到锁的过程中是否还是该对象
                     if (tabAt(tab, i) == f) {
+                        //
                         if (fh >= 0) {
+                            //标识是否要树化
                             binCount = 1;
                             for (Node<K,V> e = f;; ++binCount) {
                                 K ek;
@@ -190,10 +200,14 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
             CELLVALUE = U.objectFieldOffset
                 (ck.getDeclaredField("value"));
             Class<?> ak = Node[].class;
+            //获取该数组的起始偏移量
             ABASE = U.arrayBaseOffset(ak);
+            //获取该数组元素的间隔偏移量
             int scale = U.arrayIndexScale(ak);
+            //数据类型的大小 Node为引用型所以scale = 4 
             if ((scale & (scale - 1)) != 0)
                 throw new Error("data type scale not a power of two");
+            //numberOfLeadingZeros 返回最高顺序之前的零比特数
             ASHIFT = 31 - Integer.numberOfLeadingZeros(scale);
         } catch (Exception e) {
             throw new Error(e);
@@ -202,14 +216,19 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
     //获取volatile对象
     static final <K,V> Node<K,V> tabAt(Node<K,V>[] tab, int i) {
         /**
-         * ABASE数组的基本偏移量
+         * ABASE数组的基本偏移量起始位置
          * ASHIFT每个元素的偏移量
-         * 
+         *  ((long)i << ASHIFT) + ABASE  制定i位置的元素 getObjectVolatile获取该值
+         * 这里为什么不用table[i]来进行获取，因为即使table被volatile修饰，当内存中的table被修改时才会刷新到其他线程副本中，可能还是不是最新的。
+         * 这里使用getObjectVolatile 直接获取内存中制定位置的值来保证每次获取的都是最新的。
          */
         return (Node<K,V>)U.getObjectVolatile(tab, ((long)i << ASHIFT) + ABASE);
     }
-
-
+    //通过cas 进行一个设置值
+   static final <K,V> boolean casTabAt(Node<K,V>[] tab, int i,
+                                        Node<K,V> c, Node<K,V> v) {
+        return U.compareAndSwapObject(tab, ((long)i << ASHIFT) + ABASE, c, v);
+    }
 
 }
 ```
