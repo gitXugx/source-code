@@ -34,7 +34,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
     static final int MOVED     = -1; // hash for forwarding nodes
     //当节点树化，root节点的hash为 TREEBIN
     static final int TREEBIN   = -2; // hash for roots of trees
-    
+
     static final int RESERVED  = -3; // hash for transient reservations
     static final int HASH_BITS = 0x7fffffff; // usable bits of normal node hash
 
@@ -126,6 +126,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
                         if (fh >= 0) {
                             //标识是否要树化
                             binCount = 1;
+                            //遍历链表部分是覆盖老值还是添加新值
                             for (Node<K,V> e = f;; ++binCount) {
                                 K ek;
                                 if (e.hash == hash &&
@@ -137,6 +138,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
                                     break;
                                 }
                                 Node<K,V> pred = e;
+                                //添加新值
                                 if ((e = e.next) == null) {
                                     pred.next = new Node<K,V>(hash, key,
                                                               value, null);
@@ -144,9 +146,11 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
                                 }
                             }
                         }
+                        //判断该节点是否为红黑树
                         else if (f instanceof TreeBin) {
                             Node<K,V> p;
                             binCount = 2;
+                            //如果返回值不为空 则为修改，如果为空则为添加
                             if ((p = ((TreeBin<K,V>)f).putTreeVal(hash, key,
                                                            value)) != null) {
                                 oldVal = p.val;
@@ -157,6 +161,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
                     }
                 }
                 if (binCount != 0) {
+                    //判断是否需要树化
                     if (binCount >= TREEIFY_THRESHOLD)
                         treeifyBin(tab, i);
                     if (oldVal != null)
@@ -165,6 +170,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
                 }
             }
         }
+        //是否需要扩容和扩容逻辑
         addCount(1L, binCount);
         return null;
     }
