@@ -314,7 +314,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
     }
 }
 ```
-
+addCount主要 `BASECOUNT` 加1，判断是否需要扩容
 
 
 ```java
@@ -341,71 +341,98 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
             transferIndex = n;
         }
         int nextn = nextTab.length;
-        //创建转移节点，里面包含最新的数组
+        //创建转移节点，里面包含最新的数组，以便查询，里面的hash置是MOVED
         ForwardingNode<K,V> fwd = new ForwardingNode<K,V>(nextTab);
-        boolean advance = true;
+        //是否推进
+        boolean advance = true; 
         boolean finishing = false; // to ensure sweep before committing nextTab
+        // i是转移的最大区间，bound是转移的最小区间
         for (int i = 0, bound = 0;;) {
             Node<K,V> f; int fh;
             while (advance) {
                 int nextIndex, nextBound;
-                //转移完成
+                //--i >= bound 证明该区间内的槽还未遍历完，--i后继续遍历
                 if (--i >= bound || finishing)
-                    advance = false;    
+                    advance = false;  
+                //transferIndex 小于0 说明没有要转移的区间了 
                 else if ((nextIndex = transferIndex) <= 0) {
                     i = -1;
                     advance = false;
                 }
+                //设置转移的角标，例如 stride =16 ， nextIndex = 32 ，把TRANSFERINDEX设置成16 ， 转移先转移  nextIndex - 1 ;设置剩余区间的最大角标
                 else if (U.compareAndSwapInt
                          (this, TRANSFERINDEX, nextIndex,
                           nextBound = (nextIndex > stride ?
                                        nextIndex - stride : 0))) {
+                    //设置区间最小角标                       
                     bound = nextBound;
+                    //设置区间的最大角标
                     i = nextIndex - 1;
+                    //分配完槽后就需要下面的迁移
                     advance = false;
                 }
             }
+            //如果i角标超出预期角标 ，判断是否转移完成
             if (i < 0 || i >= n || i + n >= nextn) {
                 int sc;
                 if (finishing) {
                     nextTable = null;
+                    //使用转移后的数组
                     table = nextTab;
+                    //设置扩容阈值
                     sizeCtl = (n << 1) - (n >>> 1);
                     return;
                 }
+                //设置SIZECTL -1 标识该线程扩容帮助扩容完成
                 if (U.compareAndSwapInt(this, SIZECTL, sc = sizeCtl, sc - 1)) {
+                    //不相等说明还有帮助扩容的线程
                     if ((sc - 2) != resizeStamp(n) << RESIZE_STAMP_SHIFT)
+                        //结束，让其他线程进行置空 nextTable和 使用转移后的数组
                         return;
+                    //如果所有线程都转移完毕，则设置   finishing = true进行扩容完毕 
                     finishing = advance = true;
                     i = n; // recheck before commit
                 }
             }
+            //如果原数组该槽位null，则试着设置为fwd，该节点不用转移，只需要标志正在转移即可
             else if ((f = tabAt(tab, i)) == null)
                 advance = casTabAt(tab, i, null, fwd);
+            //说明其他线程正在处理，或者已经处理完    
             else if ((fh = f.hash) == MOVED)
                 advance = true; // already processed
             else {
+                //枷锁进行转移该槽
                 synchronized (f) {
+                    //多线程下再次判断是否转移的该槽未被修改
                     if (tabAt(tab, i) == f) {
                         Node<K,V> ln, hn;
+                        //如果hash大于0是链表结构
                         if (fh >= 0) {
                             int runBit = fh & n;
                             Node<K,V> lastRun = f;
+                            //遍历
                             for (Node<K,V> p = f.next; p != null; p = p.next) {
+                                //设置下个元素的是在高为还是在低位
                                 int b = p.hash & n;
+                                // 如果节点的 hash 值和首节点的 hash 值取于结果不同
                                 if (b != runBit) {
+                                    //用于下面判断尾节点是高位还是低位链表
                                     runBit = b;
+                                    //用于下面的循环防止多余的遍历。因为在这里已经处理过最后一个了
                                     lastRun = p;
                                 }
                             }
+                            //低位链表
                             if (runBit == 0) {
                                 ln = lastRun;
                                 hn = null;
                             }
+                            //高位链表
                             else {
                                 hn = lastRun;
                                 ln = null;
                             }
+                            //遍历槽，分为高低位两个链表
                             for (Node<K,V> p = f; p != lastRun; p = p.next) {
                                 int ph = p.hash; K pk = p.key; V pv = p.val;
                                 if ((ph & n) == 0)
@@ -413,20 +440,26 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
                                 else
                                     hn = new Node<K,V>(ph, pk, pv, hn);
                             }
+                            //设置迁移的元素
                             setTabAt(nextTab, i, ln);
                             setTabAt(nextTab, i + n, hn);
+                            //设置原数组该槽已迁移完
                             setTabAt(tab, i, fwd);
+                            //继续下一个槽迁移
                             advance = true;
                         }
+                        //红黑树迁移
                         else if (f instanceof TreeBin) {
                             TreeBin<K,V> t = (TreeBin<K,V>)f;
                             TreeNode<K,V> lo = null, loTail = null;
                             TreeNode<K,V> hi = null, hiTail = null;
                             int lc = 0, hc = 0;
+                            //遍历
                             for (Node<K,V> e = t.first; e != null; e = e.next) {
                                 int h = e.hash;
                                 TreeNode<K,V> p = new TreeNode<K,V>
                                     (h, e.key, e.val, null, null);
+                                //分为高位和低位两个链表    
                                 if ((h & n) == 0) {
                                     if ((p.prev = loTail) == null)
                                         lo = p;
@@ -444,13 +477,17 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
                                     ++hc;
                                 }
                             }
+                            //看树是否退化，或者树化
                             ln = (lc <= UNTREEIFY_THRESHOLD) ? untreeify(lo) :
                                 (hc != 0) ? new TreeBin<K,V>(lo) : t;
                             hn = (hc <= UNTREEIFY_THRESHOLD) ? untreeify(hi) :
                                 (lc != 0) ? new TreeBin<K,V>(hi) : t;
+                            //设置迁移元素    
                             setTabAt(nextTab, i, ln);
                             setTabAt(nextTab, i + n, hn);
+                            //设置原槽迁移完成
                             setTabAt(tab, i, fwd);
+                            //继续下一个槽的遍历
                             advance = true;
                         }
                     }
@@ -461,12 +498,13 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
 }
 ```
 
+扩容可以说是很复杂的操作，但是思想也是基于 `cas+synchronized` 方式来进行达到最优并发性能。
+
 
 
 
 ```java
 public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements ConcurrentMap<K,V>, Serializable {
-
     // Unsafe mechanics
     private static final sun.misc.Unsafe U;
     private static final long SIZECTL;
