@@ -264,6 +264,19 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         if (s != null)
             LockSupport.unpark(s.thread);
     }
+
+    public final boolean release(int arg) {
+        //释放锁成功，并unpark后续最近的一个节点
+        if (tryRelease(arg)) {
+            Node h = head;
+            if (h != null && h.waitStatus != 0)
+                unparkSuccessor(h);
+            return true;
+        }
+        return false;
+    }
+
+
 }
 ```
 上面是获取lock的具体逻辑。
@@ -271,6 +284,29 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
 `acquireQueued` 如果前面是头结点，进行尝试获取锁，如果获取成功当前节点设置为头结点。若失败则挂起当前线程，进行等待状态。如果当前线程中途被中断，unpark后获进行设置为取消状态。并 `unpark` next 离当前节点最近的 `未取消节点`。让其进行竞争锁。
 
 
+**unlock**
 
+```java
+public class ReentrantLock implements Lock, java.io.Serializable {
+
+    public void unlock() {
+        sync.release(1);
+    }
+    protected final boolean tryRelease(int releases) {
+        int c = getState() - releases;
+        if (Thread.currentThread() != getExclusiveOwnerThread())
+            throw new IllegalMonitorStateException();
+        boolean free = false;
+        //如果重入锁全部释放则释放成功，否则释放失败
+        if (c == 0) {
+            free = true;
+            setExclusiveOwnerThread(null);
+        }
+        setState(c);
+        return free;
+    }
+}
+```
+重入锁使用`AQS`框架开发，使用共享变量state和阻塞队列实现高性能可重入锁。
 
 
