@@ -104,5 +104,9 @@ public class ReentrantLock implements Lock, java.io.Serializable {
 
 ```
 
+AQS分为两种同步模式，一种是独占，一种是共享。重入锁使用的是独占模式，这里重入锁有两种实现方式。
+1. 公平锁: 维护一个有序的阻塞队列，获取锁的只能是当前持有锁的节点的下一个节点
+2. 非公平锁: 虽然维护一个阻塞队列，当获取锁的时候谁都能获取
 
 
+主要使用 `CAS` 和volatile修饰的state来实现锁。
