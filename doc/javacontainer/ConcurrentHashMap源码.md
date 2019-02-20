@@ -170,57 +170,299 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
                 }
             }
         }
-        //是否需要扩容和扩容逻辑
+        //是否需要扩容和basecount更新
         addCount(1L, binCount);
         return null;
     }
 
+
+}
+```
+
+put操作使用的是 `死循环+CAS+synchronized` 来进行添加元素，添加的时候分为4中情况：
+1. 若该槽中没有数据则进行cas直接进行设置，不涉及锁操作。
+2. 如果正在扩容，则尝试协助扩容，之后接着添加元素
+3. 该槽中是链表，进行锁住头节点，进行cas设值
+4. 该槽中TreeBin，进行锁住头节点，通过cas锁进行设值
+
+
+**initTable**
+
+```java
+public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements ConcurrentMap<K,V>, Serializable {
+    private final Node<K,V>[] initTable() {
+        Node<K,V>[] tab; int sc;
+        while ((tab = table) == null || tab.length == 0) {
+            //小于0证明有人在初始化
+            if ((sc = sizeCtl) < 0)
+                //尝试让出cpu给其他线程更多的机会(自己也有可能重新获取cpu片段)
+                Thread.yield(); // lost initialization race; just spin
+            //根据cas设置初始化标识。-1
+            else if (U.compareAndSwapInt(this, SIZECTL, sc, -1)) {
+                try {
+                    //也有可能线程进入到这里面进行一个重新判断，以防重复初始化
+                    if ((tab = table) == null || tab.length == 0) {
+                        int n = (sc > 0) ? sc : DEFAULT_CAPACITY;
+                        @SuppressWarnings("unchecked")
+                        Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n];
+                        table = tab = nt;
+                        sc = n - (n >>> 2);
+                    }
+                } finally {
+                    //为正数时，为tab的扩容阈值
+                    sizeCtl = sc;
+                }
+                break;
+            }
+        }
+        return tab;
+    }
+}
+```
+
+通过多层检验来保证只有一个线程初始化数组成功。同时最后设置tab扩容阈值
+
+
+**treeifyBin树化**
+```java
+public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements ConcurrentMap<K,V>, Serializable {
+    private final void treeifyBin(Node<K,V>[] tab, int index) {
+        Node<K,V> b; int n, sc;
+        if (tab != null) {
+            if ((n = tab.length) < MIN_TREEIFY_CAPACITY)
+                //如果tab容量小于最小树化的容量，则尝试扩容，一般重新扩容后就会更具高低位进行重新hash
+                tryPresize(n << 1);
+            else if ((b = tabAt(tab, index)) != null && b.hash >= 0) {
+                //锁住头节点
+                synchronized (b) {
+                    //防止多线程下重复树化
+                    if (tabAt(tab, index) == b) {
+                        TreeNode<K,V> hd = null, tl = null;
+                        //进行遍历所有节点，进行创建树节点
+                        for (Node<K,V> e = b; e != null; e = e.next) {
+                            TreeNode<K,V> p =
+                                new TreeNode<K,V>(e.hash, e.key, e.val,
+                                                  null, null);
+                            if ((p.prev = tl) == null)
+                                hd = p;
+                            else
+                                tl.next = p;
+                            tl = p;
+                        }
+                        //重新设置该槽
+                        setTabAt(tab, index, new TreeBin<K,V>(hd));
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+树化也是通过 `cas+synchronized`来进行设置。
+
+
+**addCount**
+
+```java
+public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements ConcurrentMap<K,V>, Serializable {
     private final void addCount(long x, int check) {
         CounterCell[] as; long b, s;
+        //CAS 更新 baseCount 如果成功则去判断是否需要扩容
         if ((as = counterCells) != null ||
             !U.compareAndSwapLong(this, BASECOUNT, b = baseCount, s = b + x)) {
             CounterCell a; long v; int m;
             boolean uncontended = true;
+            //并发情况下 更新 失败会进入fullAddCount 
             if (as == null || (m = as.length - 1) < 0 ||
                 (a = as[ThreadLocalRandom.getProbe() & m]) == null ||
                 !(uncontended =
                   U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x))) {
+                //cas死循环更新baseCount 或counterCells数组
                 fullAddCount(x, uncontended);
                 return;
             }
             if (check <= 1)
                 return;
+            //是进行一个baseCount + counterCells得到一个总的count
             s = sumCount();
         }
         if (check >= 0) {
             Node<K,V>[] tab, nt; int n, sc;
-            //
+            //s是添加后的容量，sizeCtl是扩容的阈值，看是否需要扩容
             while (s >= (long)(sc = sizeCtl) && (tab = table) != null &&
                    (n = tab.length) < MAXIMUM_CAPACITY) {
                 int rs = resizeStamp(n);
                 if (sc < 0) {
+                    //表明正在有扩容的，判断是否需要协助扩容
                     if ((sc >>> RESIZE_STAMP_SHIFT) != rs || sc == rs + 1 ||
                         sc == rs + MAX_RESIZERS || (nt = nextTable) == null ||
                         transferIndex <= 0)
                         break;
+                    //通过cas设置协助扩容成功
                     if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1))
+                        //进行协助扩容
                         transfer(tab, nt);
                 }
                 else if (U.compareAndSwapInt(this, SIZECTL, sc,
                                              (rs << RESIZE_STAMP_SHIFT) + 2))
+                    //进行扩容                         
                     transfer(tab, null);
                 s = sumCount();
             }
         }
     }
-
-
-
-
-
-
 }
 ```
+
+
+
+```java
+public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements ConcurrentMap<K,V>, Serializable {
+    private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
+        int n = tab.length, stride;
+        //默认让线程分配均匀，如果得到的槽少于16，就使用16(一个线程扩容16个槽)
+        if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) < MIN_TRANSFER_STRIDE)
+            stride = MIN_TRANSFER_STRIDE; // subdivide range
+        //扩容时备用的数组，为空时证明还没扩容，则初始化
+        if (nextTab == null) {            // initiating
+            try {
+                @SuppressWarnings("unchecked")
+                //原有的基础上扩容2倍
+                Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n << 1];
+                nextTab = nt;
+            } catch (Throwable ex) {      // try to cope with OOME
+                //因为这里再多线程的情况下，有可能创建多个数组，导致内存溢出问题
+                sizeCtl = Integer.MAX_VALUE;
+                return;
+            }
+            nextTable = nextTab;
+            //转移的结束索引
+            transferIndex = n;
+        }
+        int nextn = nextTab.length;
+        //创建转移节点，里面包含最新的数组
+        ForwardingNode<K,V> fwd = new ForwardingNode<K,V>(nextTab);
+        boolean advance = true;
+        boolean finishing = false; // to ensure sweep before committing nextTab
+        for (int i = 0, bound = 0;;) {
+            Node<K,V> f; int fh;
+            while (advance) {
+                int nextIndex, nextBound;
+                //转移完成
+                if (--i >= bound || finishing)
+                    advance = false;    
+                else if ((nextIndex = transferIndex) <= 0) {
+                    i = -1;
+                    advance = false;
+                }
+                else if (U.compareAndSwapInt
+                         (this, TRANSFERINDEX, nextIndex,
+                          nextBound = (nextIndex > stride ?
+                                       nextIndex - stride : 0))) {
+                    bound = nextBound;
+                    i = nextIndex - 1;
+                    advance = false;
+                }
+            }
+            if (i < 0 || i >= n || i + n >= nextn) {
+                int sc;
+                if (finishing) {
+                    nextTable = null;
+                    table = nextTab;
+                    sizeCtl = (n << 1) - (n >>> 1);
+                    return;
+                }
+                if (U.compareAndSwapInt(this, SIZECTL, sc = sizeCtl, sc - 1)) {
+                    if ((sc - 2) != resizeStamp(n) << RESIZE_STAMP_SHIFT)
+                        return;
+                    finishing = advance = true;
+                    i = n; // recheck before commit
+                }
+            }
+            else if ((f = tabAt(tab, i)) == null)
+                advance = casTabAt(tab, i, null, fwd);
+            else if ((fh = f.hash) == MOVED)
+                advance = true; // already processed
+            else {
+                synchronized (f) {
+                    if (tabAt(tab, i) == f) {
+                        Node<K,V> ln, hn;
+                        if (fh >= 0) {
+                            int runBit = fh & n;
+                            Node<K,V> lastRun = f;
+                            for (Node<K,V> p = f.next; p != null; p = p.next) {
+                                int b = p.hash & n;
+                                if (b != runBit) {
+                                    runBit = b;
+                                    lastRun = p;
+                                }
+                            }
+                            if (runBit == 0) {
+                                ln = lastRun;
+                                hn = null;
+                            }
+                            else {
+                                hn = lastRun;
+                                ln = null;
+                            }
+                            for (Node<K,V> p = f; p != lastRun; p = p.next) {
+                                int ph = p.hash; K pk = p.key; V pv = p.val;
+                                if ((ph & n) == 0)
+                                    ln = new Node<K,V>(ph, pk, pv, ln);
+                                else
+                                    hn = new Node<K,V>(ph, pk, pv, hn);
+                            }
+                            setTabAt(nextTab, i, ln);
+                            setTabAt(nextTab, i + n, hn);
+                            setTabAt(tab, i, fwd);
+                            advance = true;
+                        }
+                        else if (f instanceof TreeBin) {
+                            TreeBin<K,V> t = (TreeBin<K,V>)f;
+                            TreeNode<K,V> lo = null, loTail = null;
+                            TreeNode<K,V> hi = null, hiTail = null;
+                            int lc = 0, hc = 0;
+                            for (Node<K,V> e = t.first; e != null; e = e.next) {
+                                int h = e.hash;
+                                TreeNode<K,V> p = new TreeNode<K,V>
+                                    (h, e.key, e.val, null, null);
+                                if ((h & n) == 0) {
+                                    if ((p.prev = loTail) == null)
+                                        lo = p;
+                                    else
+                                        loTail.next = p;
+                                    loTail = p;
+                                    ++lc;
+                                }
+                                else {
+                                    if ((p.prev = hiTail) == null)
+                                        hi = p;
+                                    else
+                                        hiTail.next = p;
+                                    hiTail = p;
+                                    ++hc;
+                                }
+                            }
+                            ln = (lc <= UNTREEIFY_THRESHOLD) ? untreeify(lo) :
+                                (hc != 0) ? new TreeBin<K,V>(lo) : t;
+                            hn = (hc <= UNTREEIFY_THRESHOLD) ? untreeify(hi) :
+                                (lc != 0) ? new TreeBin<K,V>(hi) : t;
+                            setTabAt(nextTab, i, ln);
+                            setTabAt(nextTab, i + n, hn);
+                            setTabAt(tab, i, fwd);
+                            advance = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+
+
 
 ```java
 public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements ConcurrentMap<K,V>, Serializable {
