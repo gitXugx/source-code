@@ -1,6 +1,5 @@
 # ConcurrentHashMap源码
 
-
 ## ConcurrentHashMap
 
 **字段以及声明**
@@ -8,7 +7,6 @@
 
 public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements ConcurrentMap<K,V>, Serializable {
     private static final long serialVersionUID = 7249069246763182397L;
-
     //最大容量
     private static final int MAXIMUM_CAPACITY = 1 << 30;
 
@@ -26,6 +24,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
     static final int UNTREEIFY_THRESHOLD = 6;
     //达到树化的最小容量需要64
     static final int MIN_TREEIFY_CAPACITY = 64;
+    //最小并发区间
     private static final int MIN_TRANSFER_STRIDE = 16;
     private static int RESIZE_STAMP_BITS = 16;
     private static final int MAX_RESIZERS = (1 << (32 - RESIZE_STAMP_BITS)) - 1;
