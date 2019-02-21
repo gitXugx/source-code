@@ -56,6 +56,39 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         if (tryAcquireShared(arg) < 0)
             doAcquireShared(arg);
     }
+    private void doAcquireShared(int arg) {
+        //把添加读线程节点到尾部
+        final Node node = addWaiter(Node.SHARED);
+        boolean failed = true;
+        try {
+            boolean interrupted = false;
+            for (;;) {
+                //获取前一个节点
+                final Node p = node.predecessor();
+                if (p == head) {
+                    //如果前一个节点是head节点，再尝试获取锁
+                    int r = tryAcquireShared(arg);
+                    if (r >= 0) {
+                        setHeadAndPropagate(node, r);
+                        p.next = null; // help GC
+                        if (interrupted)
+                            selfInterrupt();
+                        failed = false;
+                        return;
+                    }
+                }
+                //如果前一个节点线程处于阻塞状态则挂起当前线程
+                if (shouldParkAfterFailedAcquire(p, node) &&
+                    //挂起当前线程，恢复的时候，并判断当前线程是否被中断，如果中断则恢复中断标识，并从节点中剔除
+                    parkAndCheckInterrupt())
+                    interrupted = true;
+            }
+        } finally {
+            if (failed)
+                //保证该节点要么被设置为无效，要么状态被重置为0，重置为0的情况下属于中断的状态被重置过。
+                cancelAcquire(node);
+        }
+    }
 }
 
 abstract static class Sync extends AbstractQueuedSynchronizer {
