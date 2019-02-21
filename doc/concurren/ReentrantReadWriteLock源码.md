@@ -62,13 +62,13 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
     protected final int tryAcquireShared(int unused) {
         Thread current = Thread.currentThread();
         int c = getState();
-        //读锁被获取，并且获取的不是当前线程，返回-1，证明当前线程有写锁或者整体没有写锁
+        //写锁被获取，并且获取的不是当前线程，则返回-1。继续执行证明当前线程有写锁或者整体没有写锁
         if (exclusiveCount(c) != 0 &&
             getExclusiveOwnerThread() != current)
             return -1;
-        //获取共享锁    
+        //获取读锁    
         int r = sharedCount(c);
-        //当前读锁应该阻塞:1.非公平锁当队列头部下一个是独占锁时，该读锁阻塞，防止写锁饥饿。2.公平锁当前线程不是头节点的下一个节点时应该阻塞
+        //当前线程读锁应该持有写锁，才能导致后面阻塞的是一个是读锁。
         if (!readerShouldBlock() &&
             //读锁不能大于最大持有数
             r < MAX_COUNT &&
@@ -101,7 +101,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
             //返回获取成功
             return 1;
         }
-        //如果上面读取失败，下面死循环+cas进行获取读锁
+        //如果上面获取读锁失败，下面死循环+cas进行获取读锁
         return fullTryAcquireShared(current);
     }
 
@@ -111,29 +111,34 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
                 int c = getState();
                 //是否有独占
                 if (exclusiveCount(c) != 0) {
-                    //独占如果不是当前线程直接返回
+                    //写锁被其他线程获取，直接返回把当前线程加入到等待队列排队
                     if (getExclusiveOwnerThread() != current)
                         return -1;
-                    // else we hold the exclusive lock; blocking here
-                    // would cause deadlock.
+                //证明有读锁阻塞了写锁，或者其他线程获取了读锁
                 } else if (readerShouldBlock()) {
                     // Make sure we're not acquiring read lock reentrantly
                     if (firstReader == current) {
+                        //当前线程如果多次获得了读锁证明不会出现死锁问题，因为当前读锁阻塞了写锁
                         // assert firstReaderHoldCount > 0;
                      //当前线程不是   
                     } else {
                         if (rh == null) {
                             rh = cachedHoldCounter;
+                            //最后一个线程的rh锁的缓冲，有可能不是当前线程
                             if (rh == null || rh.tid != getThreadId(current)) {
+                                //获取该线程的计数器
                                 rh = readHolds.get();
+                                //如果count=0 里面没有读锁，证明在其他线程还有读锁，导致后面的写锁在阻塞
                                 if (rh.count == 0)
                                     readHolds.remove();
                             }
                         }
+                        //所以把该读锁添加到队列中，让写锁来进行获取锁，以免发生死锁
                         if (rh.count == 0)
                             return -1;
                     }
                 }
+                //否则该线程以持有锁，接着重入锁
                 //重入计数小于最大值
                 if (sharedCount(c) == MAX_COUNT)
                     throw new Error("Maximum lock count exceeded");
