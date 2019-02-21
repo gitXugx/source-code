@@ -307,6 +307,30 @@ public class ReentrantLock implements Lock, java.io.Serializable {
     }
 }
 ```
-重入锁使用`AQS`框架开发，使用共享变量state和阻塞队列实现高性能可重入锁。
+重入锁使用`AQS`框架开发，使用共享变量state、park、unpark和阻塞队列实现高性能可重入锁。
 
+
+**tryLock**
+```java
+
+public class ReentrantLock implements Lock, java.io.Serializable {
+
+    public boolean tryLock(long timeout, TimeUnit unit)
+            throws InterruptedException {
+        return sync.tryAcquireNanos(1, unit.toNanos(timeout));
+    }
+    //尝试获取锁
+    public final boolean tryAcquireNanos(int arg, long nanosTimeout)
+            throws InterruptedException {
+        if (Thread.interrupted())
+            throw new InterruptedException();
+        //先直接尝试获取锁    
+        return tryAcquire(arg) ||
+            //把该节点添加到队列，如果在该时间内未获取到锁，则挂起该线程，返回false
+            doAcquireNanos(arg, nanosTimeout);
+    }
+}
+```
+
+让开发人员在获取不到锁，做其他的事情
 
