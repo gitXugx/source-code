@@ -65,10 +65,12 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
             for (;;) {
                 //获取前一个节点
                 final Node p = node.predecessor();
+                //如果前一个节点是head节点证明有机会获得锁
                 if (p == head) {
                     //如果前一个节点是head节点，再尝试获取锁
                     int r = tryAcquireShared(arg);
                     if (r >= 0) {
+                        //获取读锁后，要进行一个传播
                         setHeadAndPropagate(node, r);
                         p.next = null; // help GC
                         if (interrupted)
@@ -200,6 +202,138 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
 ```
 
 
+**ReadLock.unlock**
+
+
+```java
+public static class ReadLock implements Lock, java.io.Serializable {
+    public void unlock() {
+        //调用的还是AQS的模板方法
+        sync.releaseShared(1);
+    }
+    protected final boolean tryReleaseShared(int unused) {
+        Thread current = Thread.currentThread();
+        
+        if (firstReader == current) {
+            //当前线程是第一个获取读锁的，如果读锁没有重入，则直接置空
+            if (firstReaderHoldCount == 1)
+                firstReader = null;
+            else
+                //重入减减
+                firstReaderHoldCount--;
+        } else {
+            //从缓存中获取该线程的读锁重入次数
+            HoldCounter rh = cachedHoldCounter;
+            if (rh == null || rh.tid != getThreadId(current))
+                rh = readHolds.get();
+            int count = rh.count;
+            //如果没有count小于0证明没有获取到锁，而去释放锁，抛出异常
+            if (count <= 1) {
+                readHolds.remove();
+                if (count <= 0)
+                    throw unmatchedUnlockException();
+            }
+            //把持有读锁的计数器-1
+            --rh.count;
+        }
+        for (;;) {
+            int c = getState();
+            int nextc = c - SHARED_UNIT;
+            //设置State的高16位的读锁
+            if (compareAndSetState(c, nextc))
+                // Releasing the read lock has no effect on readers,
+                // but it may allow waiting writers to proceed if
+                // both read and write locks are now free.
+                //返回读锁是否释放完
+                return nextc == 0;
+        }
+    }
+}
+public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer implements java.io.Serializable {
+    //释放读锁
+    public final boolean releaseShared(int arg) {
+        //释放读锁，返回全部读锁是否释放完
+        if (tryReleaseShared(arg)) {
+            //unpark写锁
+            doReleaseShared();
+            return true;
+        }
+        return false;
+    }
+
+    private void doReleaseShared() {
+        for (;;) {
+            Node h = head;
+            if (h != null && h != tail) {
+                int ws = h.waitStatus;
+                //把当前线程设置
+                if (ws == Node.SIGNAL) {
+                    //如果当前节点之前排过队则唤醒后面的线程再把waitStatus等于0
+                    if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
+                        continue;            // loop to recheck cases
+                    //从后往前遍历找到离当前线程节点最近有效的node节点，unpark其线程，因为每个线程在尝试获取锁的时候都会校验前面的线程是否有效
+                    unparkSuccessor(h);
+                }
+                //
+                else if (ws == 0 &&
+                         !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
+                    continue;                // loop on failed CAS
+            }
+            if (h == head)                   // loop if head changed
+                break;
+        }
+    }
+
+}
+```
+
+
+
+
+
+**WriteLock.lock**
+
+
+```java
+public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer implements java.io.Serializable {
+    public final void acquire(int arg) {
+        //独占成功返回true后不需要排对。
+        if (!tryAcquire(arg) &&
+            //获取锁未成功，需要排队，排队和reentrantlock一样，添加队列，看前一个元素是否为head，如果是再次尝试获取锁，如果获取失败，
+            //当前线程过滤掉前面无效的节点，如果前面的节点是阻塞状态，则挂起该线程
+            //如果前面不是无效或者等待的线程，则当前线程改为等待状态，循环尝试获取锁。
+            acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+            selfInterrupt();
+    }
+    protected final boolean tryAcquire(int acquires) {
+        Thread current = Thread.currentThread();
+        int c = getState();
+        int w = exclusiveCount(c);
+        if (c != 0) {
+            // w == 0 证明只有读锁，读锁是不能升级为写锁，因为读锁是可多线程持有
+            //current != getExclusiveOwnerThread() 当前线程没有写锁，无法获取
+            if (w == 0 || current != getExclusiveOwnerThread())
+                return false;
+            //重入锁最大了
+            if (w + exclusiveCount(acquires) > MAX_COUNT)
+                throw new Error("Maximum lock count exceeded");
+            // Reentrant acquire
+            //设置重入独占锁成功
+            setState(c + acquires);
+            return true;
+        }
+        //没有任何锁被获取
+        //非公平和公平不一样的实现，非公平锁可以直接竞争返回false，公平锁需要排对
+        if (writerShouldBlock() ||
+            //设置失败证明写锁被其他线程获取直接返回false
+            !compareAndSetState(c, c + acquires))
+            return false;
+        //把当前线程设置为独占    
+        setExclusiveOwnerThread(current);
+        return true;
+    }
+}
+```
 
 
 
